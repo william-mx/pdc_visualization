@@ -12,7 +12,7 @@ from sensor_msgs.msg import PointCloud2
 
 from pdc_visualization.utils import TFHandler
 
-class UltrasonicSensorProcessor(Node):
+class PDCVisualizer(Node):
     def __init__(self):
         super().__init__('ultrasonic_pointcloud')
 
@@ -124,7 +124,7 @@ class UltrasonicSensorProcessor(Node):
 
 def main():
     rclpy.init()
-    node = UltrasonicSensorProcessor()
+    node = PDCVisualizer()
 
     try:
         node.get_logger().info("Node started. Press Ctrl+C to exit.")
