@@ -36,7 +36,8 @@ class UltrasonicSensorProcessor(Node):
 
         self.frames = list(self.index2frame.values())
 
-        # Fetch transformations using the function
+        # Fetch transformations
+        self.node.get_logger().info("Waiting for static transforms. Make sure the 'tf_static' topic is being published.")
         self.transformations = {frame: self.tf_handler.get_transform(frame, self.base) for frame in self.frames}
 
         # Create a QoS profile
