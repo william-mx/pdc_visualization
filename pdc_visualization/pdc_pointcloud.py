@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-import rclpy
 import numpy as np
+import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PointStamped
-import sensor_msgs_py.point_cloud2 as pc2
-from mxck_run.message_utils import get_relative_transform, create_point_cloud_message
-from sensor_msgs.msg import PointCloud2
-from std_msgs.msg import Int16MultiArray
 from rclpy.qos import qos_profile_sensor_data
+
 import tf2_geometry_msgs
+from ros2_numpy import np_to_pointcloud, np_to_point
+
+from std_msgs.msg import Int16MultiArray
+from sensor_msgs.msg import PointCloud2
+
+from pdc_visualization.utils import TFHandler
 
 class UltrasonicSensorProcessor(Node):
     def __init__(self):
@@ -26,13 +28,16 @@ class UltrasonicSensorProcessor(Node):
         self.angle_end = np.deg2rad(self.fov / 2)  # End angle in radians
         self.thetas = np.linspace(self.angle_start, self.angle_end, self.num_points)
 
+        # init to read transofmration ebtween frames
+        self.tf_handler = TFHandler(self)
+
         # Mapping sensor indices to tf frames
         self.load_params()
 
         self.frames = list(self.index2frame.values())
 
         # Fetch transformations using the function
-        self.transformations = {frame: get_relative_transform(frame, self.base) for frame in self.frames}
+        self.transformations = {frame: self.tf_handler.get_transform(frame, self.base) for frame in self.frames}
 
         # Create a QoS profile
         qos_profile = qos_profile_sensor_data
@@ -58,7 +63,7 @@ class UltrasonicSensorProcessor(Node):
             all_points.extend(transformed_points)
 
 
-        pointcloud_msg = create_point_cloud_message(all_points, self.base)
+        pointcloud_msg = np_to_pointcloud(all_points, self.base)
         self.publisher.publish(pointcloud_msg)
         
     def generate_points_at_waves(self, measurement):
@@ -81,21 +86,17 @@ class UltrasonicSensorProcessor(Node):
 
     def transform_points(self, points, from_frame):
         transformed_points = []
-        for (x, y, z) in points:
-            point_stamped = PointStamped()
-            point_stamped.header.frame_id = from_frame
-            point_stamped.header.stamp = rclpy.clock.Clock().now().to_msg()
-            point_stamped.point.x = x
-            point_stamped.point.y = y
-            point_stamped.point.z = z
+        for point in points:
+            point_stamped = np_to_point(point)
             
             transformation = self.transformations.get(from_frame)
             if transformation is None:
                 self.get_logger().error(f"No transformation available for frame {from_frame}")
-                continue  # Skip this point or handle it according to your application's needs
-
-            transformed_point = tf2_geometry_msgs.do_transform_point(point_stamped, transformation)
-            transformed_points.append((transformed_point.point.x, transformed_point.point.y, transformed_point.point.z))
+                continue  # Skip this point
+            
+            # Transform point from ultrasonic sensor frame to base_link frame
+            pt = tf2_geometry_msgs.do_transform_point(point_stamped, transformation) 
+            transformed_points.append((pt.point.x, pt.point.y, pt.point.z))
 
         return transformed_points
 
@@ -122,10 +123,16 @@ class UltrasonicSensorProcessor(Node):
 
 def main():
     rclpy.init()
-    processor = UltrasonicSensorProcessor()
-    rclpy.spin(processor)
-    processor.destroy_node()
-    rclpy.shutdown()
+    node = UltrasonicSensorProcessor()
+
+    try:
+        node.get_logger().info("Node started. Press Ctrl+C to exit.")
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().warn("KeyboardInterrupt received. Shutting down gracefully...")
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
