@@ -63,9 +63,9 @@ class PDCVisualizer(Node):
             transformed_points = self.transform_points(points, self.index2frame[i])
             all_points.extend(transformed_points)
 
-
-        pointcloud_msg = np_to_pointcloud(all_points, self.base)
-        self.publisher.publish(pointcloud_msg)
+        if len(all_points) > 0:
+            pointcloud_msg = np_to_pointcloud(all_points, self.base)
+            self.publisher.publish(pointcloud_msg)
         
     def generate_points_at_waves(self, measurement):
         distances = self.intervals[self.intervals < measurement]
